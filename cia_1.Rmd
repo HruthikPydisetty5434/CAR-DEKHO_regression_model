@@ -1,0 +1,438 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(caret)
+library(glmnet)
+library(MASS)
+library(car)
+library(ggplot2)
+library(reshape2)
+# Load the required libraries
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(caTools)
+library(glmnet)
+library(MASS)
+
+# Load the data
+car_data <- read.csv("C:\\Users\\hruth\\Downloads\\CAR DETAILS FROM CAR DEKHO.csv")
+
+# Display the first few rows and summary of the dataset
+head(car_data)
+summary(car_data)
+str(car_data)
+
+
+```
+
+```{r}
+# Check for missing values
+colSums(is.na(car_data))
+
+# Convert categorical variables to factors
+# Convert categorical variables to factors
+car_data$fuel <- as.factor(car_data$fuel)
+car_data$seller_type <- as.factor(car_data$seller_type)
+car_data$transmission <- as.factor(car_data$transmission)
+car_data$owner <- as.factor(car_data$owner)
+
+# Check the structure of the dataset
+str(car_data)
+
+
+```
+```{r}
+# Check for missing values
+missing_values <- sapply(car_data, function(x) sum(is.na(x)))
+print(missing_values)
+
+# Check for duplicates
+duplicates <- sum(duplicated(car_data))
+print(duplicates)
+
+# Removing duplicates
+car_data <- car_data[!duplicated(car_data), ]
+
+# Check for outliers using boxplots
+ggplot(car_data, aes(x = "", y = selling_price)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Selling Prices", y = "Selling Price")
+```
+```{r}
+
+# Boxplot to visualize outliers
+boxplot(car_data$selling_price, main="Boxplot for Selling Price", ylab="Selling Price")
+
+# Removing outliers
+Q1 <- quantile(car_data$selling_price, 0.25)
+Q3 <- quantile(car_data$selling_price, 0.75)
+IQR <- Q3 - Q1
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+car_data <- subset(car_data, selling_price >= lower_bound & selling_price <= upper_bound)
+
+# Boxplot to visualize outliers
+boxplot(car_data$selling_price, main="Boxplot for Selling Price", ylab="Selling Price")
+
+
+# Summary after removing outliers
+summary(car_data$selling_price)
+```
+```{r}
+
+# Load visualization libraries
+library(ggplot2)
+library(GGally)
+
+# Distribution of selling price
+ggplot(car_data, aes(x = selling_price)) + 
+  geom_histogram(binwidth = 50000, fill = "blue", color = "black") + 
+  labs(title = "Distribution of Selling Price", x = "Selling Price", y = "Count")
+
+# Boxplot of selling price by year
+ggplot(car_data, aes(x = year, y = selling_price)) + 
+  geom_boxplot() + 
+  labs(title = "Selling Price by Year", x = "Year", y = "Selling Price")
+
+# Boxplot of selling price by transmission
+ggplot(car_data, aes(x = transmission, y = selling_price)) + 
+  geom_boxplot() + 
+  labs(title = "Selling Price by Transmission", x = "Transmission", y = "Selling Price")
+
+# Boxplot of selling price by owner type
+ggplot(car_data, aes(x = owner, y = selling_price)) + 
+  geom_boxplot() + 
+  labs(title = "Selling Price by Owner Type", x = "Owner Type", y = "Selling Price")
+
+# Scatter plot of selling price vs km_driven
+ggplot(car_data, aes(x = km_driven, y = selling_price)) + 
+  geom_point(alpha = 0.5) + 
+  labs(title = "Selling Price vs. KM Driven", x = "KM Driven", y = "Selling Price")
+
+```
+
+```{r}
+# Correlation matrix
+cor_matrix <- cor(car_data %>% select_if(is.numeric))
+print(cor_matrix)
+
+
+# Extract numeric columns
+numeric_data <- car_data[, sapply(car_data, is.numeric)]
+
+# Compute the correlation matrix
+cor_matrix <- cor(numeric_data, use = "complete.obs")
+
+# Melt the correlation matrix
+melted_cor_matrix <- melt(cor_matrix)
+
+# Create the heatmap
+ggplot(data = melted_cor_matrix, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                       midpoint = 0, limit = c(-1, 1), space = "Lab",
+                       name="Correlation") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1)) +
+  coord_fixed()
+
+```
+```{r}
+# Histogram of selling prices
+ggplot(car_data, aes(x = selling_price)) +
+  geom_histogram(bins = 30, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of Selling Prices", x = "Selling Price", y = "Frequency")
+
+# Scatter plot of selling price vs year
+ggplot(car_data, aes(x = year, y = selling_price)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  labs(title = "Selling Price vs Year", x = "Year", y = "Selling Price")
+
+# Boxplot of selling price by fuel type
+ggplot(car_data, aes(x = fuel, y = selling_price)) +
+  geom_boxplot() +
+  labs(title = "Selling Price by Fuel Type", x = "Fuel Type", y = "Selling Price")
+
+```
+```{r}
+str(car_data)
+summary(car_data)
+
+```
+```{r}
+# Load necessary library for chi-square test
+library(stats)
+
+# Convert selling_price into a categorical variable (e.g., quartiles)
+car_data$selling_price_cat <- cut(car_data$selling_price, 
+                                  breaks = quantile(car_data$selling_price, probs = seq(0, 1, 0.25), na.rm = TRUE), 
+                                  include.lowest = TRUE, 
+                                  labels = c("Low", "Medium-Low", "Medium-High", "High"))
+
+# Perform chi-square test for each factor variable against selling_price_cat
+chi_square_results <- lapply(car_data[c("fuel", "seller_type", "transmission", "owner")], function(x) {
+  chisq.test(table(x, car_data$selling_price_cat))
+})
+
+# Print chi-square test results
+print(chi_square_results)
+
+```
+Chi-Square Test Results Interpretation
+The chi-square test was performed to determine if there is a significant association between each categorical variable (fuel, seller_type, transmission, owner) and the categorized selling_price (quartiles: Low, Medium-Low, Medium-High, High). Here are the results and their interpretations:
+
+1. Fuel Type and Selling Price
+Chi-Square Statistic (X-squared): 391.26
+Degrees of Freedom (df): 12
+p-value: < 2.2e-16
+Interpretation:
+The very low p-value (< 2.2e-16) indicates a significant association between the fuel type of a car and its selling price. This suggests that the fuel type significantly affects the selling price of used cars. Cars with different fuel types (e.g., Petrol, Diesel, CNG) tend to have different price distributions.
+
+2. Seller Type and Selling Price
+Chi-Square Statistic (X-squared): 197.85
+Degrees of Freedom (df): 6
+p-value: < 2.2e-16
+Interpretation:
+The p-value (< 2.2e-16) indicates a significant association between the seller type and the selling price of used cars. This means that whether the seller is a dealer, individual, or trustmark dealer significantly influences the selling price. Different seller types have different price distributions for their cars.
+
+3. Transmission Type and Selling Price
+Chi-Square Statistic (X-squared): 109.7
+Degrees of Freedom (df): 3
+p-value: < 2.2e-16
+Interpretation:
+The significant p-value (< 2.2e-16) shows a significant association between the transmission type (Automatic or Manual) and the selling price. The type of transmission significantly affects how cars are priced in the used car market, with different transmission types having distinct price patterns.
+
+4. Ownership and Selling Price
+Chi-Square Statistic (X-squared): 480.3
+Degrees of Freedom (df): 12
+p-value: < 2.2e-16
+Interpretation:
+The p-value (< 2.2e-16) indicates a significant association between the type of ownership (e.g., First Owner, Second Owner, etc.) and the selling price. This means that the number of previous owners significantly influences the selling price of used cars. Cars with different ownership histories tend to have different selling price distributions.
+
+General Interpretation
+All the p-values for the chi-square tests are less than 0.05, indicating significant associations between each categorical variable and the selling price. These results suggest that factors such as fuel type, seller type, transmission type, and ownership history play a crucial role in determining the selling price of used cars.
+```{r}
+t_test_transmission <- t.test(selling_price ~ transmission, data = car_data)
+print(t_test_transmission)
+
+```
+1. Distribution of Selling Price
+Histogram: The histogram provides a visual summary of the distribution of selling prices of cars in the dataset. Most of the cars are priced below 2.5 million, with a peak around the lower price range. The right skewness indicates a larger number of cheaper cars compared to high-priced ones, suggesting the dataset primarily includes budget and mid-range vehicles rather than luxury cars.
+2. Selling Price by Year
+Boxplot: The boxplot shows how car prices have varied over the years. Each box represents the IQR (25th to 75th percentile) of prices for cars manufactured in that year. The median price is shown as a line within each box.
+
+Interpretation: Generally, newer cars (more recent years) tend to have higher median prices compared to older models. However, there are outliers across all years, indicating that some older cars can still sell for high prices, possibly due to being classic or luxury models. The spread of prices (range from minimum to maximum) also tends to be wider for newer cars, reflecting a more varied market for recent models.
+3. Selling Price by Transmission
+Boxplot: This boxplot compares the selling prices of cars with automatic vs. manual transmissions.
+
+Interpretation: Cars with automatic transmissions have a higher median selling price than those with manual transmissions. The IQR and the range of prices are also higher for automatic cars, suggesting that automatic transmissions are more valued in the market. The presence of outliers in both categories indicates that there are some cars with exceptionally high or low prices regardless of transmission type.
+4. Selling Price by Owner Type
+Boxplot: This boxplot shows the selling prices segmented by the type of car owner (e.g., first owner, second owner, etc.).
+
+Interpretation: First-owner cars generally have higher median prices compared to cars with multiple previous owners. As the number of previous owners increases, the median selling price decreases. This reflects a market perception that cars with fewer owners are better maintained and thus more valuable. Test drive cars show significant variability, possibly due to different conditions and types of cars used for test drives.
+5. Selling Price vs. KM Driven
+Scatter Plot: The scatter plot depicts the relationship between the number of kilometers driven and the selling price of the cars.
+
+Interpretation: There is a negative correlation between kilometers driven and selling price. This means that cars with higher mileage tend to have lower selling prices. The scatter plot shows a wide dispersion, indicating that while mileage is an important factor, other variables (e.g., brand, model, condition) also significantly affect the price.
+6. Correlation Matrix
+Correlation Values: The correlation matrix shows the strength and direction of the linear relationship between numerical variables.
+
+Interpretation: The negative correlation between selling price and kilometers driven (-0.192) suggests that as cars accumulate more kilometers, their selling prices tend to decrease. The correlation is not very strong, indicating that other factors also play a significant role in determining the selling price.
+7. T-Test for Transmission
+T-Test Results: The t-test compares the mean selling prices between cars with automatic and manual transmissions.
+
+Interpretation: The t-test results show a significant difference in the mean selling prices of automatic and manual cars (p-value < 2.2e-16). The mean price of automatic cars (1,408,154) is significantly higher than that of manual cars (400,066.7). This statistically significant difference indicates that transmission type is an important factor influencing car prices.
+8. ANOVA for Owner Type
+ANOVA Results: The ANOVA test examines the impact of owner type on the selling price.
+
+Interpretation: The significant p-value (< 2e-16) from the ANOVA indicates that the type of owner has a statistically significant effect on the selling price. This supports the earlier observation from the boxplot that cars with fewer previous owners tend to have higher selling prices.
+9. Linear Regression Model
+Regression Summary: The linear regression model provides coefficients for each predictor, showing their impact on the selling price.
+
+Intercept: The base price when all predictors are zero.
+
+Car Models: The coefficients for each car model indicate their impact on the selling price compared to the baseline model. Positive coefficients indicate that those models tend to sell for higher prices, while negative coefficients indicate lower prices.
+
+Other Variables: Year, km_driven, fuel type, seller type, transmission, and owner type also have their respective coefficients, showing how each factor influences the selling price.
+
+Interpretation: The model identifies which factors significantly influence the selling price. For example, certain luxury brands (like Audi and BMW) have large positive coefficients, indicating higher selling prices. The model also reveals that manual cars, older models, and cars with more previous owners tend to have lower selling prices.
+
+```{r}
+anova_owner <- aov(selling_price ~ owner, data = car_data)
+summary(anova_owner)
+```
+1.Distribution of Selling Price
+Histogram: The histogram of selling prices shows the frequency distribution of the selling prices of cars in the dataset. The prices are binned, typically in increments of 50,000 units. Most of the cars fall within the lower price ranges, indicating a higher number of budget-friendly cars in the dataset.
+2. Selling Price by Year
+Boxplot: This boxplot illustrates the distribution of selling prices across different years. Each box represents the interquartile range (IQR) of prices for a given year, with the median price marked. The spread of the boxes and presence of outliers can give insights into price trends over time, showing which years have more variability in car prices.
+3. Selling Price by Transmission
+Boxplot: The boxplot comparing selling prices between automatic and manual transmissions indicates the differences in price distributions for these two categories. The analysis reveals that cars with automatic transmission generally have higher selling prices compared to manual ones.
+4. Selling Price by Owner Type
+Boxplot: This boxplot shows how the selling prices vary according to the type of car owner (e.g., first owner, second owner, etc.). The prices tend to decrease with more previous owners, with first-owner cars typically fetching higher prices.
+5. Selling Price vs. KM Driven
+Scatter Plot: This scatter plot shows the relationship between the number of kilometers driven and the selling price. Generally, there's a negative correlation, meaning that higher mileage tends to lower the car's selling price.
+6. Correlation Matrix
+Correlation Values: The correlation matrix presents the relationship between numerical variables in the dataset. A notable finding is the negative correlation between selling price and kilometers driven (-0.192), implying that as cars accumulate more kilometers, their selling price tends to decrease.
+7. T-Test for Transmission
+T-Test Results: The t-test compares the mean selling prices between automatic and manual transmissions. The significant p-value (< 2.2e-16) indicates a statistically significant difference in mean selling prices between the two groups, with automatic cars having higher mean prices.
+8. ANOVA for Owner Type
+ANOVA Results: The ANOVA test examines the effect of the owner type on the selling price. The significant p-value (< 2e-16) suggests that the type of owner significantly influences the selling price.
+9. Linear Regression Model
+Regression Summary: The linear regression model assesses the impact of various predictors on the selling price. The summary includes coefficients for each predictor, indicating their effect on the selling price. For instance, specific car models have varying positive or negative impacts on the price.
+
+```{r}
+# Split the data into training and testing sets
+set.seed(123)
+split <- sample.split(car_data$selling_price, SplitRatio = 0.7)
+training_set <- subset(car_data, split == TRUE)
+testing_set <- subset(car_data, split == FALSE)
+
+# Recreate x_train and x_test to ensure they have the same columns
+x_train <- model.matrix(selling_price ~ ., data = training_set)[, -1]
+y_train <- training_set$selling_price
+
+# Fix factor levels in testing_set to match training_set
+for (var in names(training_set)[sapply(training_set, is.factor)]) {
+  levels(testing_set[[var]]) <- levels(training_set[[var]])
+}
+
+# Recreate x_test after fixing factor levels
+x_test <- model.matrix(selling_price ~ ., data = testing_set)[, -1]
+y_test <- testing_set$selling_price
+
+# Add missing columns to x_test with zero values
+missing_cols <- setdiff(colnames(x_train), colnames(x_test))
+if (length(missing_cols) > 0) {
+  x_test <- cbind(x_test, matrix(0, nrow = nrow(x_test), ncol = length(missing_cols), dimnames = list(NULL, missing_cols)))
+}
+
+# Reorder columns in x_test to match x_train
+x_test <- x_test[, colnames(x_train), drop = FALSE]
+
+# Check the dimensions of x_train and x_test
+print(dim(x_train))  # Should be 2541 1242
+print(dim(x_test))   # Should be 1036 1242
+
+
+```
+```{r}
+# Full Linear Regression Model
+full_model <- lm(selling_price ~ ., data = training_set)
+full_model_summary <- summary(full_model)
+summary(full_model)
+# Compare models
+aic_score_full <- AIC(full_model)
+plot(full_model)
+
+
+
+
+```
+
+```{r}
+# Perform stepwise AIC
+# Linear Regression Model with AIC
+step_model <- stepAIC(full_model, direction = "backward")
+
+aic_model <- lm(selling_price ~ name + year + km_driven + seller_type + owner + selling_price_cat, data = training_set)
+summary(aic_model)
+
+aic_score_step <- AIC(aic_model)
+
+aic_score_step
+plot(aic_model)
+
+```
+```{r}
+```
+```{r}
+# Lasso Regression
+lasso_model <- cv.glmnet(x_train, y_train, alpha = 1)
+lasso_pred <- predict(lasso_model, s = lasso_model$lambda.min, newx = x_test)
+lasso_r_squared <- 1 - sum((y_test - lasso_pred)^2) / sum((y_test - mean(y_test))^2)
+lasso_mse <- mean((y_test - lasso_pred)^2)
+lasso_mae <- mean(abs(y_test - lasso_pred))
+lasso_model
+lasso_pred
+lasso_r_squared
+plot(lasso_model)
+
+```
+```{r}
+# Ridge Regression
+ridge_model <- cv.glmnet(x_train, y_train, alpha = 0)
+ridge_pred <- predict(ridge_model, s = ridge_model$lambda.min, newx = x_test)
+ridge_r_squared <- 1 - sum((y_test - ridge_pred)^2) / sum((y_test - mean(y_test))^2)
+ridge_mse <- mean((y_test - ridge_pred)^2)
+ridge_mae <- mean(abs(y_test - ridge_pred))
+ridge_model
+ridge_pred
+ridge_r_squared
+
+```
+```{r}
+plot(ridge_model)
+
+```
+```{r}
+# Convert necessary columns to numeric if applicable
+training_set$seller_type <- as.numeric(training_set$seller_type)
+training_set$owner <- as.numeric(training_set$owner)
+
+# Compute correlation matrix using numeric variables
+cor_matrix <- cor(training_set[, c("year", "km_driven", "seller_type", "owner", "selling_price")])
+print("Correlation Matrix:")
+print(cor_matrix)
+
+
+```
+```{r}
+# Check AIC score
+aic_score <- AIC(step_model)
+print(paste("AIC Score:", aic_score))
+
+```
+```{r}
+# Independence of residuals (Residuals vs Index)
+plot(step_model, which=5, main="Residuals vs Index")
+```
+
+
+```{r}
+# Homoscedasticity (Residuals vs Fitted)
+plot(step_model, which=3, main="Residuals vs Fitted")
+
+```
+
+```{r}
+# Shapiro-Wilk test for normality of residuals
+shapiro.test(residuals(step_model))
+
+```
+
+```{r}
+# Diagnostic plots
+par(mfrow = c(2, 2))  # Set up a 2x2 grid of plots
+plot(step_model)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
